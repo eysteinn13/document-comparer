@@ -5,16 +5,18 @@ import pandas as pd
 # Initialize the chromadb client
 CLIENT = chromadb.Client()
 
-
-def build_collection(df):
-    collection = CLIENT.create_collection(name="source_document")
-    # Add documents and their IDs from the dataframe
-    collection.add(
-        documents=df['Description'].tolist(),
-        ids=df['Criteria'].astype(str).tolist()
-    )
+def get_or_create_collection(df):
+    # Check if the collection already exists
+    try:
+        collection = CLIENT.create_collection(name="source_document")
+        # Add documents and their IDs from the dataframe
+        collection.add(
+            documents=df['Description'].tolist(),
+            ids=df['Criteria'].astype(str).tolist()
+        )
+    except chromadb.errors.UniqueConstraintError:
+        collection = CLIENT.get_collection(name="source_document")
     return collection
-
 
 # Streamlit UI
 st.title('Document Similarity Finder')
@@ -40,12 +42,14 @@ if first_doc and second_doc and not st.session_state.collection_created:
     df2 = pd.read_csv(second_doc)
 
     # Build the collection using the second document
-    st.session_state.collection = build_collection(df2)
+    collection = get_or_create_collection(df2)
     st.session_state.collection_created = True
+    st.session_state.collection = collection
 
 if st.session_state.collection_created and query_text:
     # Query the collection
-    results = st.session_state.collection.query(
+    collection = st.session_state.collection
+    results = collection.query(
         query_texts=[query_text],
         n_results=n_results
     )
